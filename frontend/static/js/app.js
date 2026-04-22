@@ -46,7 +46,8 @@ function downloadResult(id) {
   const url = URL.createObjectURL(blob);
   const a = document.createElement("a");
   a.href = url;
-  a.download = "智校通结果.txt";
+  const ts = new Date().toISOString().slice(0, 16).replace("T", "_").replace(":", "-");
+  a.download = `智校通_${id}_${ts}.txt`;
   document.body.appendChild(a);
   a.click();
   document.body.removeChild(a);
@@ -69,8 +70,8 @@ function md2html(text) {
     .replace(/^\s*>\s+(.+)$/gm, "<blockquote>$1</blockquote>")
     .replace(/^\s*[-*]\s+(.+)$/gm, "<li>$1</li>")
     .replace(/(<li>.*<\/li>\n?)+/g, m => `<ul>${m}</ul>`)
-    .replace(/^\s*\d+\.\s+(.+)$/gm, "<oli>$1</oli>")
-    .replace(/(<oli>.*<\/oli>\n?)+/g, m => `<ol>${m.replace(/<\/?oli>/g, t => t === "<oli>" ? "<li>" : "</li>")}</ol>`)
+    .replace(/^\s*\d+\.\s+(.+)$/gm, "<li-ol>$1</li-ol>")
+    .replace(/(<li-ol>.*<\/li-ol>\n?)+/g, m => `<ol>${m.replace(/<\/?li-ol>/g, t => t === "<li-ol>" ? "<li>" : "</li>")}</ol>`)
     .replace(/\n{2,}/g, "</p><p>")
     .replace(/^(?!<[a-z])(.+)$/gm, m => m.trim() ? `<p>${m}</p>` : "");
 }
