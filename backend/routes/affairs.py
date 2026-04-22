@@ -4,7 +4,7 @@ from flask import Blueprint, request, jsonify
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
 from services.ai_service import chat_completion
-from services.kb_service import get_affair_info, get_all_affair_types, search_knowledge
+from services.kb_service import get_affair_info, search_knowledge
 
 affairs_bp = Blueprint("affairs", __name__, url_prefix="/api/affairs")
 
@@ -52,6 +52,12 @@ def query_affair():
 
     affair_type = _detect_affair_type(query)
     kb_context = _build_kb_context(affair_type)
+
+    # Supplement with full-text knowledge search when structured info is missing
+    if not kb_context:
+        search_results = search_knowledge(query)
+        if search_results:
+            kb_context = "\n".join(r["content"] for r in search_results)
 
     system_prompt = (
         "你是一位专业的高校学生事务助手，熟悉高校各类学生事务的办理流程、"

@@ -95,6 +95,7 @@ study/
 | POST | `/api/growth/resume` | 简历优化 |
 | POST | `/api/growth/interview` | 面试训练 |
 | POST | `/api/growth/campus-nav` | 校园导航 |
+| POST | `/api/growth/exam-reminder` | 考试提醒计划 |
 | GET  | `/api/health` | 服务健康检查 |
 
 ## 文档目录
