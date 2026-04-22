@@ -2,26 +2,56 @@ import io
 import os
 import sys
 from flask import Blueprint, request, jsonify
+from werkzeug.utils import secure_filename
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
+from config import MAX_TEXT_LENGTH, MAX_QUERY_LENGTH
 from services.ai_service import chat_completion
 
 academic_bp = Blueprint("academic", __name__, url_prefix="/api/academic")
 
 ALLOWED_EXTENSIONS = {"pdf", "docx", "doc", "txt", "md"}
 
+# 文件魔数（Magic Bytes）白名单
+_MAGIC_BYTES = {
+    b"%PDF": "pdf",
+    b"PK\x03\x04": "docx",  # ZIP-based formats (docx, doc with compat)
+}
+
 
 def _allowed_file(filename):
     return "." in filename and filename.rsplit(".", 1)[1].lower() in ALLOWED_EXTENSIONS
 
 
+def _check_magic_bytes(content, filename):
+    """基于文件魔数校验文件类型是否与扩展名匹配（宽松策略：未命中魔数时按扩展名放行）"""
+    for magic, ftype in _MAGIC_BYTES.items():
+        if content.startswith(magic):
+            ext = filename.rsplit(".", 1)[-1].lower() if "." in filename else ""
+            # PDF 魔数 → 只允许 .pdf 扩展名
+            if ftype == "pdf" and ext != "pdf":
+                return False
+            # ZIP/docx 魔数 → 只允许 .docx/.doc 扩展名
+            if ftype == "docx" and ext not in ("docx", "doc"):
+                return False
+            return True
+    # 文本类文件无魔数，直接放行
+    return True
+
+
 def _extract_text(file):
     """从上传文件中提取文本"""
-    filename = file.filename.lower()
+    raw_name = file.filename or ""
+    filename = secure_filename(raw_name).lower()
+    if not filename:
+        return ""
     content = b""
     try:
         content = file.read()
     except Exception:
+        return ""
+
+    if not _check_magic_bytes(content, filename):
         return ""
 
     if filename.endswith(".txt") or filename.endswith(".md"):
@@ -52,12 +82,15 @@ def extract_knowledge():
     text = ""
     if "file" in request.files:
         f = request.files["file"]
-        if f and f.filename and _allowed_file(f.filename):
+        if f and f.filename and _allowed_file(secure_filename(f.filename or "")):
             text = _extract_text(f)
     if not text:
         text = request.form.get("text", "") or (request.json or {}).get("text", "")
-    if not text.strip():
+    text = (text or "").strip()
+    if not text:
         return jsonify({"error": "请上传文件或输入文本内容"}), 400
+    if len(text) > MAX_TEXT_LENGTH:
+        return jsonify({"error": f"文本内容过长，请控制在 {MAX_TEXT_LENGTH} 字符以内"}), 400
 
     preview = text[:3000]
     messages = [
@@ -91,6 +124,8 @@ def generate_questions():
 
     if not content:
         return jsonify({"error": "请提供知识点或课程内容"}), 400
+    if len(content) > MAX_TEXT_LENGTH:
+        return jsonify({"error": f"内容过长，请控制在 {MAX_TEXT_LENGTH} 字符以内"}), 400
 
     type_desc = {
         "single": "单选题",
@@ -129,6 +164,10 @@ def study_plan():
 
     if not subject:
         return jsonify({"error": "请填写课程名称"}), 400
+    if len(subject) > MAX_QUERY_LENGTH:
+        return jsonify({"error": "课程名称过长"}), 400
+    if len(weak_points) > MAX_TEXT_LENGTH:
+        return jsonify({"error": "薄弱知识点内容过长"}), 400
 
     context = f"课程：{subject}"
     if exam_date:
@@ -166,6 +205,8 @@ def literature_review():
 
     if not topic:
         return jsonify({"error": "请填写研究主题"}), 400
+    if len(topic) > MAX_QUERY_LENGTH:
+        return jsonify({"error": "研究主题过长"}), 400
 
     messages = [
         {
@@ -203,6 +244,10 @@ def lab_report():
 
     if not experiment:
         return jsonify({"error": "请填写实验名称"}), 400
+    if len(experiment) > MAX_QUERY_LENGTH:
+        return jsonify({"error": "实验名称过长"}), 400
+    if len(purpose) + len(method) + len(data_input) > MAX_TEXT_LENGTH:
+        return jsonify({"error": "输入内容过长，请适当精简"}), 400
 
     content = f"实验名称：{experiment}"
     if purpose:
@@ -238,6 +283,8 @@ def wrong_questions():
 
     if not questions:
         return jsonify({"error": "请输入错题内容"}), 400
+    if len(questions) > MAX_TEXT_LENGTH:
+        return jsonify({"error": f"错题内容过长，请控制在 {MAX_TEXT_LENGTH} 字符以内"}), 400
 
     messages = [
         {

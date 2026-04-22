@@ -3,6 +3,7 @@ import sys
 from flask import Blueprint, request, jsonify
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
+from config import MAX_QUERY_LENGTH, MAX_HISTORY_MSG_LENGTH, MAX_HISTORY_TURNS
 from services.ai_service import chat_completion
 from services.kb_service import get_affair_info, search_knowledge
 
@@ -49,6 +50,8 @@ def query_affair():
     query = data.get("query", "").strip()
     if not query:
         return jsonify({"error": "请输入您的问题"}), 400
+    if len(query) > MAX_QUERY_LENGTH:
+        return jsonify({"error": f"问题过长，请控制在 {MAX_QUERY_LENGTH} 字符以内"}), 400
 
     affair_type = _detect_affair_type(query)
     kb_context = _build_kb_context(affair_type)
@@ -90,10 +93,19 @@ def generate_template():
 
     if not template_type:
         return jsonify({"error": "请指定申请类型"}), 400
+    if len(template_type) > MAX_QUERY_LENGTH:
+        return jsonify({"error": "申请类型名称过长"}), 400
 
+    # 校验 user_info 类型并限制每个字段长度
+    if not isinstance(user_info, dict):
+        user_info = {}
     info_str = ""
     if user_info:
-        info_str = "\n".join(f"{k}：{v}" for k, v in user_info.items() if v)
+        info_str = "\n".join(
+            f"{str(k)[:50]}：{str(v)[:200]}"
+            for k, v in list(user_info.items())[:20]
+            if v
+        )
 
     messages = [
         {
@@ -132,6 +144,8 @@ def affairs_chat():
 
     if not message:
         return jsonify({"error": "请输入消息"}), 400
+    if len(message) > MAX_QUERY_LENGTH:
+        return jsonify({"error": f"消息过长，请控制在 {MAX_QUERY_LENGTH} 字符以内"}), 400
 
     messages = [
         {
@@ -143,9 +157,21 @@ def affairs_chat():
             ),
         }
     ]
-    for item in history[-10:]:
-        if item.get("role") in ("user", "assistant") and item.get("content"):
-            messages.append({"role": item["role"], "content": item["content"]})
+    # 校验历史记录：只接受合法 role，限制单条消息长度
+    valid_history = []
+    if isinstance(history, list):
+        for item in history:
+            if not isinstance(item, dict):
+                continue
+            role = item.get("role", "")
+            content = item.get("content", "")
+            if role not in ("user", "assistant"):
+                continue
+            if not isinstance(content, str):
+                continue
+            valid_history.append({"role": role, "content": content[:MAX_HISTORY_MSG_LENGTH]})
+    for item in valid_history[-MAX_HISTORY_TURNS:]:
+        messages.append(item)
     messages.append({"role": "user", "content": message})
 
     result = chat_completion(messages, temperature=0.5)

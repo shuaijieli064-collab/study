@@ -1,13 +1,19 @@
+import logging
 import os
 import sys
 from flask import Flask, jsonify, send_from_directory
 from flask_cors import CORS
 
 sys.path.insert(0, os.path.dirname(__file__))
-from config import SECRET_KEY, DEBUG, MAX_CONTENT_LENGTH
+from config import SECRET_KEY, DEBUG, MAX_CONTENT_LENGTH, CORS_ORIGINS
 from routes.academic import academic_bp
 from routes.affairs import affairs_bp
 from routes.growth import growth_bp
+
+logging.basicConfig(
+    level=logging.DEBUG if DEBUG else logging.INFO,
+    format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
+)
 
 app = Flask(
     __name__,
@@ -17,7 +23,7 @@ app = Flask(
 app.config["SECRET_KEY"] = SECRET_KEY
 app.config["MAX_CONTENT_LENGTH"] = MAX_CONTENT_LENGTH
 
-CORS(app, resources={r"/api/*": {"origins": "*"}})
+CORS(app, resources={r"/api/*": {"origins": CORS_ORIGINS}})
 
 # 注册蓝图
 app.register_blueprint(academic_bp)

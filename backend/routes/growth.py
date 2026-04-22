@@ -3,6 +3,7 @@ import sys
 from flask import Blueprint, request, jsonify
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
+from config import MAX_TEXT_LENGTH, MAX_QUERY_LENGTH, MAX_EXAM_COUNT
 from services.ai_service import chat_completion
 
 growth_bp = Blueprint("growth", __name__, url_prefix="/api/growth")
@@ -19,6 +20,10 @@ def career_plan():
 
     if not major:
         return jsonify({"error": "请填写专业信息"}), 400
+    if len(major) > MAX_QUERY_LENGTH:
+        return jsonify({"error": "专业信息过长"}), 400
+    if len(interests) + len(goals) > MAX_TEXT_LENGTH:
+        return jsonify({"error": "输入内容过长，请适当精简"}), 400
 
     context = f"专业：{major}"
     if grade:
@@ -58,6 +63,8 @@ def optimize_resume():
 
     if not resume_text:
         return jsonify({"error": "请粘贴您的简历内容"}), 400
+    if len(resume_text) > MAX_TEXT_LENGTH:
+        return jsonify({"error": f"简历内容过长，请控制在 {MAX_TEXT_LENGTH} 字符以内"}), 400
 
     context = f"目标岗位：{target_position}" if target_position else ""
     if target_industry:
@@ -98,9 +105,14 @@ def interview_practice():
     answer = data.get("answer", "").strip()
     mode = data.get("mode", "feedback")  # feedback / generate
 
+    if mode not in ("feedback", "generate"):
+        return jsonify({"error": "无效的 mode 参数"}), 400
+
     if mode == "generate":
         if not position:
             return jsonify({"error": "请填写目标岗位"}), 400
+        if len(position) > MAX_QUERY_LENGTH:
+            return jsonify({"error": "目标岗位信息过长"}), 400
         messages = [
             {
                 "role": "system",
@@ -117,6 +129,8 @@ def interview_practice():
     else:
         if not question or not answer:
             return jsonify({"error": "请填写面试题目和您的回答"}), 400
+        if len(question) > MAX_QUERY_LENGTH or len(answer) > MAX_TEXT_LENGTH:
+            return jsonify({"error": "输入内容过长，请适当精简"}), 400
         messages = [
             {
                 "role": "system",
@@ -148,6 +162,8 @@ def campus_nav():
 
     if not query:
         return jsonify({"error": "请输入您的问题"}), 400
+    if len(query) > MAX_QUERY_LENGTH:
+        return jsonify({"error": f"问题过长，请控制在 {MAX_QUERY_LENGTH} 字符以内"}), 400
 
     messages = [
         {
@@ -171,12 +187,27 @@ def exam_reminder():
     exams = data.get("exams", [])
     semester_start = data.get("semester_start", "").strip()
 
-    if not exams:
+    if not isinstance(exams, list) or not exams:
         return jsonify({"error": "请提供考试信息"}), 400
 
+    # 限制数量并校验每个考试条目
+    exams = exams[:MAX_EXAM_COUNT]
+    validated_exams = []
+    for e in exams:
+        if not isinstance(e, dict):
+            continue
+        name = str(e.get("name", "") or "").strip()[:100]
+        date = str(e.get("date", "") or "").strip()[:20]
+        notes = str(e.get("notes", "") or "").strip()[:200]
+        if name:
+            validated_exams.append({"name": name, "date": date, "notes": notes})
+
+    if not validated_exams:
+        return jsonify({"error": "请提供有效的考试信息（至少填写考试名称）"}), 400
+
     exam_list = "\n".join(
-        f"- {e.get('name', '未命名')}：{e.get('date', '待定')}（{e.get('notes', '')}）"
-        for e in exams
+        f"- {e['name']}：{e['date']}（{e['notes']}）"
+        for e in validated_exams
     )
 
     messages = [
