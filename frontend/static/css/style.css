@@ -208,7 +208,56 @@ textarea { resize: vertical; min-height: 80px; }
   font-family: inherit;
 }
 .btn-copy:hover { border-color: var(--primary); color: var(--primary); }
+.btn-download:hover { border-color: var(--success); color: var(--success); }
 .btn-clear:hover { border-color: var(--danger); color: var(--danger); }
+
+/* ===== 次要按钮 ===== */
+.btn-secondary {
+  background: var(--gray-100);
+  color: var(--gray-700);
+  border: 1.5px solid var(--gray-200);
+  width: 100%;
+  margin-top: .25rem;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: .4rem;
+  padding: .5rem 1.25rem;
+  border-radius: 8px;
+  font-size: .9rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all .2s;
+  font-family: inherit;
+}
+.btn-secondary:hover { background: var(--gray-200); border-color: var(--gray-300); }
+
+/* ===== 考试提醒 ===== */
+.exam-item {
+  border: 1px solid var(--gray-200);
+  border-radius: 8px;
+  padding: .75rem;
+  margin-bottom: .5rem;
+  background: var(--gray-50);
+  position: relative;
+}
+.exam-item-header {
+  display: flex;
+  justify-content: flex-end;
+  margin-bottom: .25rem;
+}
+.btn-remove-exam {
+  background: none;
+  border: none;
+  color: var(--gray-500);
+  cursor: pointer;
+  font-size: .85rem;
+  padding: .1rem .3rem;
+  border-radius: 4px;
+  line-height: 1;
+  transition: all .15s;
+}
+.btn-remove-exam:hover { background: var(--gray-200); color: var(--danger); }
 
 /* ===== 文件上传 ===== */
 .upload-area {

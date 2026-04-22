@@ -357,6 +357,38 @@
           </div>
           <div class="result-box" id="campusNavResult"></div>
         </div>
+
+        <!-- 考试提醒计划 -->
+        <div class="card">
+          <div class="card-title">⏰ 考试提醒计划</div>
+          <div class="card-body">
+            <div class="form-group">
+              <label>本学期开始日期</label>
+              <input type="date" id="erSemesterStart" />
+            </div>
+            <div id="examList">
+              <div class="exam-item">
+                <div class="form-row">
+                  <div class="form-group">
+                    <label>考试名称 *</label>
+                    <input type="text" class="er-name" placeholder="如：高等数学期末" />
+                  </div>
+                  <div class="form-group">
+                    <label>考试日期</label>
+                    <input type="date" class="er-date" />
+                  </div>
+                </div>
+                <div class="form-group">
+                  <label>备注</label>
+                  <input type="text" class="er-notes" placeholder="如：占总分50%，重点复习第3-5章" />
+                </div>
+              </div>
+            </div>
+            <button class="btn btn-secondary" onclick="addExamItem()">➕ 添加考试</button>
+            <button class="btn btn-primary" onclick="generateExamReminder()">⏰ 生成提醒计划</button>
+          </div>
+          <div class="result-box" id="examReminderResult"></div>
+        </div>
       </div>
     </section>
 

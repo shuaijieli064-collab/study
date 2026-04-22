@@ -21,6 +21,7 @@ function showResult(id, html) {
     <div class="result-inner">${html}</div>
     <div class="result-actions">
       <button class="btn-copy" onclick="copyResult('${id}')">📋 复制</button>
+      <button class="btn-download" onclick="downloadResult('${id}')">📥 下载</button>
       <button class="btn-clear" onclick="clearResult('${id}')">🗑️ 清除</button>
     </div>`;
 }
@@ -35,6 +36,22 @@ function copyResult(id) {
   const inner = document.querySelector(`#${id} .result-inner`);
   if (!inner) return;
   navigator.clipboard.writeText(inner.innerText).then(() => showToast("✅ 已复制到剪贴板")).catch(() => showToast("❌ 复制失败"));
+}
+
+function downloadResult(id) {
+  const inner = document.querySelector(`#${id} .result-inner`);
+  if (!inner) return;
+  const text = inner.innerText;
+  const blob = new Blob([text], { type: "text/plain;charset=utf-8" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = "智校通结果.txt";
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+  showToast("✅ 已下载文件");
 }
 
 /** 简单 Markdown → HTML（无依赖） */
@@ -52,7 +69,8 @@ function md2html(text) {
     .replace(/^\s*>\s+(.+)$/gm, "<blockquote>$1</blockquote>")
     .replace(/^\s*[-*]\s+(.+)$/gm, "<li>$1</li>")
     .replace(/(<li>.*<\/li>\n?)+/g, m => `<ul>${m}</ul>`)
-    .replace(/^\s*\d+\.\s+(.+)$/gm, "<li>$1</li>")
+    .replace(/^\s*\d+\.\s+(.+)$/gm, "<oli>$1</oli>")
+    .replace(/(<oli>.*<\/oli>\n?)+/g, m => `<ol>${m.replace(/<\/?oli>/g, t => t === "<oli>" ? "<li>" : "</li>")}</ol>`)
     .replace(/\n{2,}/g, "</p><p>")
     .replace(/^(?!<[a-z])(.+)$/gm, m => m.trim() ? `<p>${m}</p>` : "");
 }
@@ -310,6 +328,60 @@ async function askCampusNav() {
   try {
     const data = await apiPost("/api/growth/campus-nav", { query });
     showResult("campusNavResult", md2html(data.result));
+  } catch (e) { showToast("❌ " + e.message); } finally { hideLoading(); }
+}
+
+/* ===== 考试提醒 ===== */
+function addExamItem() {
+  const list = document.getElementById("examList");
+  const item = document.createElement("div");
+  item.className = "exam-item";
+  item.innerHTML = `
+    <div class="exam-item-header">
+      <button class="btn-remove-exam" onclick="removeExamItem(this)" title="删除">✕</button>
+    </div>
+    <div class="form-row">
+      <div class="form-group">
+        <label>考试名称 *</label>
+        <input type="text" class="er-name" placeholder="如：线性代数期末" />
+      </div>
+      <div class="form-group">
+        <label>考试日期</label>
+        <input type="date" class="er-date" />
+      </div>
+    </div>
+    <div class="form-group">
+      <label>备注</label>
+      <input type="text" class="er-notes" placeholder="如：占总分50%，重点复习第3-5章" />
+    </div>`;
+  list.appendChild(item);
+}
+
+function removeExamItem(btn) {
+  const item = btn.closest(".exam-item");
+  const list = document.getElementById("examList");
+  if (list.querySelectorAll(".exam-item").length > 1) {
+    item.remove();
+  } else {
+    showToast("⚠️ 至少保留一门考试");
+  }
+}
+
+async function generateExamReminder() {
+  const semester_start = document.getElementById("erSemesterStart").value;
+  const items = document.querySelectorAll(".exam-item");
+  const exams = [];
+  items.forEach(item => {
+    const name = item.querySelector(".er-name").value.trim();
+    const date = item.querySelector(".er-date").value;
+    const notes = item.querySelector(".er-notes").value.trim();
+    if (name) exams.push({ name, date, notes });
+  });
+  if (exams.length === 0) { showToast("⚠️ 请至少填写一门考试名称"); return; }
+  showLoading();
+  try {
+    const data = await apiPost("/api/growth/exam-reminder", { exams, semester_start });
+    showResult("examReminderResult", md2html(data.result));
   } catch (e) { showToast("❌ " + e.message); } finally { hideLoading(); }
 }
 
