@@ -12,6 +12,10 @@ logger = logging.getLogger(__name__)
 AI_API_KEY = os.getenv("AI_API_KEY", "")
 AI_API_BASE = os.getenv("AI_API_BASE", "https://api.openai.com/v1")
 AI_MODEL = os.getenv("AI_MODEL", "gpt-3.5-turbo")
+try:
+    AI_TIMEOUT_SECONDS = max(5, int(os.getenv("AI_TIMEOUT_SECONDS", "30")))
+except ValueError:
+    AI_TIMEOUT_SECONDS = 30
 
 # Flask 配置
 _DEFAULT_SECRET_KEY = "zhixiaotong-secret-key-2024"

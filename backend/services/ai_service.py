@@ -1,43 +1,48 @@
 import json
 import os
 import sys
+import requests
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
-from config import AI_API_KEY, AI_API_BASE, AI_MODEL
+from config import AI_API_KEY, AI_API_BASE, AI_MODEL, AI_TIMEOUT_SECONDS
 
-try:
-    from openai import OpenAI
-    _client = None
 
-    def _get_client():
-        global _client
-        if _client is None:
-            if not AI_API_KEY:
-                return None
-            _client = OpenAI(api_key=AI_API_KEY, base_url=AI_API_BASE)
-        return _client
-
-    def chat_completion(messages, temperature=0.7, max_tokens=2000):
-        """调用 AI 接口获取回复"""
-        if not AI_API_KEY:
-            return _mock_response(messages)
-        try:
-            client = _get_client()
-            if client is None:
-                return _mock_response(messages)
-            response = client.chat.completions.create(
-                model=AI_MODEL,
-                messages=messages,
-                temperature=temperature,
-                max_tokens=max_tokens,
-            )
-            return response.choices[0].message.content
-        except Exception:
-            return "[AI服务暂时不可用，请稍后重试或联系管理员]"
-
-except ImportError:
-    def chat_completion(messages, temperature=0.7, max_tokens=2000):
+def chat_completion(messages, temperature=0.7, max_tokens=2000):
+    """调用 AI 接口获取回复"""
+    if not AI_API_KEY:
         return _mock_response(messages)
+
+    try:
+        headers = {
+            "Authorization": f"Bearer {AI_API_KEY}",
+            "Content-Type": "application/json"
+        }
+
+        payload = {
+            "model": AI_MODEL,
+            "messages": messages,
+            "temperature": temperature,
+            "max_tokens": max_tokens
+        }
+
+        response = requests.post(
+            f"{AI_API_BASE}/chat/completions",
+            headers=headers,
+            json=payload,
+            timeout=AI_TIMEOUT_SECONDS
+        )
+
+        if response.status_code == 200:
+            result = response.json()
+            return result["choices"][0]["message"]["content"]
+        else:
+            error_msg = response.text
+            return f"[AI服务返回错误: {response.status_code} - {error_msg}]"
+
+    except requests.exceptions.Timeout:
+        return "[AI服务超时，请稍后重试]"
+    except Exception as e:
+        return f"[AI服务暂时不可用: {str(e)}]"
 
 
 def _mock_response(messages):
@@ -193,7 +198,7 @@ def _mock_response(messages):
             "- 技术岗：突出项目经历、技术栈和编程能力\n"
             "- 产品/运营岗：突出数据分析能力和用户思维\n"
             "- 管理培训生：突出领导力和综合素质\n\n"
-            "> ⚠️ 当前为演示模式，请配置 `AI_API_KEY` 以启用真实AI功能。"
+            "> ⚠�� 当前为演示模式，请配置 `AI_API_KEY` 以启用真实AI功能。"
         )
     if "面试" in last and ("点评" in last or "回答" in last or "建议" in last):
         return (
@@ -241,7 +246,7 @@ def _mock_response(messages):
             "- **图书馆**：可通过官网或微信公众号预约自习室，提前1-2天预约成功率更高\n"
             "- **数字资源**：校内网络可免费访问知网、万方、Web of Science等学术数据库\n"
             "- **课程资源**：关注学校慕课平台，辅助课程学习\n\n"
-            "### 🏅 课外活动\n\n"
+            "### ��� 课外活动\n\n"
             "- **学生社团**：大一开学时参加社团招新，选择1-2个感兴趣的社团\n"
             "- **科技竞赛**：互联网+、挑战杯、数学建模等竞赛有利于简历加分\n"
             "- **志愿服务**：积累志愿时长，体现综合素质\n\n"

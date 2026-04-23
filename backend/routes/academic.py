@@ -85,7 +85,8 @@ def extract_knowledge():
         if f and f.filename and _allowed_file(secure_filename(f.filename or "")):
             text = _extract_text(f)
     if not text:
-        text = request.form.get("text", "") or (request.json or {}).get("text", "")
+        json_data = request.get_json(silent=True) or {}
+        text = request.form.get("text", "") or json_data.get("text", "")
     text = (text or "").strip()
     if not text:
         return jsonify({"error": "请上传文件或输入文本内容"}), 400
@@ -114,10 +115,10 @@ def extract_knowledge():
 @academic_bp.route("/generate-questions", methods=["POST"])
 def generate_questions():
     """根据文本或知识点生成练习题"""
-    data = request.json or {}
+    data = request.get_json(silent=True) or {}
     content = data.get("content", "").strip()
     try:
-        count = min(int(data.get("count", 5)), 20)
+        count = max(1, min(int(data.get("count", 5)), 20))
     except (TypeError, ValueError):
         count = 5
     q_type = data.get("type", "mixed")  # single/multiple/short/mixed
@@ -156,7 +157,7 @@ def generate_questions():
 @academic_bp.route("/study-plan", methods=["POST"])
 def study_plan():
     """生成个性化复习计划"""
-    data = request.json or {}
+    data = request.get_json(silent=True) or {}
     subject = data.get("subject", "").strip()
     exam_date = data.get("exam_date", "").strip()
     weak_points = data.get("weak_points", "").strip()
@@ -169,13 +170,22 @@ def study_plan():
     if len(weak_points) > MAX_TEXT_LENGTH:
         return jsonify({"error": "薄弱知识点内容过长"}), 400
 
+    available_hours_value = None
+    if available_hours not in (None, ""):
+        try:
+            available_hours_value = float(available_hours)
+        except (TypeError, ValueError):
+            return jsonify({"error": "每日可用学习时间格式不正确"}), 400
+        if available_hours_value <= 0 or available_hours_value > 24:
+            return jsonify({"error": "每日可用学习时间应在 0-24 小时之间"}), 400
+
     context = f"课程：{subject}"
     if exam_date:
         context += f"\n考试日期：{exam_date}"
     if weak_points:
         context += f"\n薄弱知识点：{weak_points}"
-    if available_hours:
-        context += f"\n每天可用学习时间：{available_hours} 小时"
+    if available_hours_value is not None:
+        context += f"\n每天可用学习时间：{available_hours_value:g} 小时"
 
     messages = [
         {
@@ -199,7 +209,7 @@ def study_plan():
 @academic_bp.route("/literature-review", methods=["POST"])
 def literature_review():
     """文献综述框架辅助"""
-    data = request.json or {}
+    data = request.get_json(silent=True) or {}
     topic = data.get("topic", "").strip()
     field = data.get("field", "").strip()
 
@@ -236,7 +246,7 @@ def literature_review():
 @academic_bp.route("/lab-report", methods=["POST"])
 def lab_report():
     """实验报告初稿辅助"""
-    data = request.json or {}
+    data = request.get_json(silent=True) or {}
     experiment = data.get("experiment", "").strip()
     purpose = data.get("purpose", "").strip()
     method = data.get("method", "").strip()
@@ -277,7 +287,7 @@ def lab_report():
 @academic_bp.route("/wrong-questions", methods=["POST"])
 def wrong_questions():
     """错题本整理与分析"""
-    data = request.json or {}
+    data = request.get_json(silent=True) or {}
     questions = data.get("questions", "").strip()
     subject = data.get("subject", "").strip()
 
