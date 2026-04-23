@@ -24,6 +24,18 @@ function showResult(id, html) {
       <button class="btn-download" onclick="downloadResult('${id}')">📥 下载</button>
       <button class="btn-clear" onclick="clearResult('${id}')">🗑️ 清除</button>
     </div>`;
+  // 渲染数学公式
+  if (typeof renderMathInElement !== 'undefined') {
+    renderMathInElement(box, {
+      delimiters: [
+        {left: '$$', right: '$$', display: true},
+        {left: '$', right: '$', display: false},
+        {left: '\\(', right: '\\)', display: false},
+        {left: '\\[', right: '\\]', display: true}
+      ],
+      throwOnError: false
+    });
+  }
 }
 
 function clearResult(id) {
