@@ -1,7 +1,8 @@
-/* global app.js — 智校通前端逻辑 */
+/* 智校通前端逻辑 — 完整版本（包含上传进度、复制、导出PDF、重新生成） */
 
 const API = "";   // 同域部署，前缀留空
 let affairsChatHistory = [];
+const lastRequests = {}; // 存储结果区对应的可重试标识或元数据
 
 /* ===== 工具函数 ===== */
 function showLoading() { document.getElementById("loadingOverlay").classList.add("active"); }
@@ -14,13 +15,17 @@ function showToast(msg, duration = 2500) {
   setTimeout(() => t.classList.remove("show"), duration);
 }
 
-function showResult(id, html) {
+/* 显示结果，meta 可用于记录重试标识 */
+function showResult(id, html, meta) {
+  if (meta) lastRequests[id] = meta;
   const box = document.getElementById(id);
   box.classList.add("visible");
   box.innerHTML = `
     <div class="result-inner">${html}</div>
     <div class="result-actions">
       <button class="btn-copy" onclick="copyResult('${id}')">📋 复制</button>
+      <button class="btn-pdf" onclick="exportPDF('${id}')">📄 导出PDF</button>
+      <button class="btn-regenerate" onclick="regenerate('${id}')">🔁 重新生成</button>
       <button class="btn-download" onclick="downloadResult('${id}')">📥 下载</button>
       <button class="btn-clear" onclick="clearResult('${id}')">🗑️ 清除</button>
     </div>`;
@@ -42,6 +47,7 @@ function clearResult(id) {
   const box = document.getElementById(id);
   box.classList.remove("visible");
   box.innerHTML = "";
+  delete lastRequests[id];
 }
 
 function copyResult(id) {
@@ -149,11 +155,13 @@ document.querySelectorAll(".nav-btn").forEach(btn => {
     document.querySelectorAll(".nav-btn").forEach(b => b.classList.remove("active"));
     btn.classList.add("active");
     document.querySelectorAll(".tab-content").forEach(t => t.classList.remove("active"));
-    document.getElementById("tab-" + btn.dataset.tab).classList.add("active");
+    const tab = btn.dataset.tab || 'academic';
+    const target = document.getElementById("tab-" + tab);
+    if (target) target.classList.add("active");
   });
 });
 
-/* ===== 文件上传 ===== */
+/* ===== 文件上传（含进度） ===== */
 const uploadArea = document.getElementById("uploadArea");
 const fileInput = document.getElementById("fileInput");
 if (uploadArea) {
@@ -174,14 +182,51 @@ function updateFileLabel(name) {
   document.getElementById("uploadPlaceholder").style.display = "none";
   const sel = document.getElementById("uploadSelected");
   sel.style.display = "block";
-  sel.textContent = "📎 " + name;
+  sel.innerHTML = `📎 ${name} <button class="btn-secondary" style="margin-left:8px;padding:.25rem .5rem;font-size:.8rem" onclick="retryUpload()">上传失败？重试</button>`;
 }
 
-/* ===== 学术辅助 ===== */
+/* 基于 XHR 的上传，支持进度回调 */
+function uploadWithProgress(url, formData, onProgress) {
+  return new Promise((resolve, reject) => {
+    const xhr = new XMLHttpRequest();
+    xhr.open("POST", API + url);
+    xhr.withCredentials = false;
+    xhr.onreadystatechange = () => {
+      if (xhr.readyState === 4) {
+        const ct = xhr.getResponseHeader("content-type") || "";
+        if (xhr.status >= 200 && xhr.status < 300) {
+          if (ct.includes("application/json")) {
+            try { resolve(JSON.parse(xhr.responseText)); } catch (e) { resolve({ result: xhr.responseText }); }
+          } else {
+            resolve({ result: xhr.responseText });
+          }
+        } else {
+          let err = "上传失败 (" + xhr.status + ")";
+          try {
+            const j = JSON.parse(xhr.responseText || "{}");
+            err = j.error || err;
+          } catch (e) {}
+          reject(new Error(err));
+        }
+      }
+    };
+    xhr.upload.onprogress = (e) => {
+      if (e.lengthComputable && typeof onProgress === "function") {
+        const pct = Math.round((e.loaded / e.total) * 100);
+        onProgress(pct);
+      }
+    };
+    xhr.onerror = () => reject(new Error("网络错误，上传失败"));
+    xhr.send(formData);
+  });
+}
+
+/* ===== 学术辅助：extractKnowledge（使用 uploadWithProgress） ===== */
 async function extractKnowledge() {
   const file = fileInput && fileInput.files[0];
   const text = document.getElementById("extractText").value.trim();
   if (!file && !text) { showToast("⚠️ 请上传文件或输入课程内容"); return; }
+
   showLoading();
   try {
     let data;
@@ -189,12 +234,23 @@ async function extractKnowledge() {
       const fd = new FormData();
       fd.append("file", file);
       if (text) fd.append("text", text);
-      data = await apiPost("/api/academic/extract-knowledge", fd, true);
+
+      const progressEl = document.getElementById("uploadProgress");
+      progressEl.style.display = "block";
+      progressEl.value = 0;
+
+      data = await uploadWithProgress("/api/academic/extract-knowledge", fd, (pct) => {
+        progressEl.value = pct;
+      });
+      progressEl.style.display = "none";
     } else {
       data = await apiPost("/api/academic/extract-knowledge", { text });
     }
-    showResult("extractResult", md2html(data.result));
-  } catch (e) { showToast("❌ " + e.message); } finally { hideLoading(); }
+    const meta = { func: "extractKnowledge" };
+    showResult("extractResult", md2html(data.result), meta);
+  } catch (e) {
+    showToast("❌ " + e.message);
+  } finally { hideLoading(); }
 }
 
 async function generateQuestions() {
@@ -205,7 +261,8 @@ async function generateQuestions() {
   showLoading();
   try {
     const data = await apiPost("/api/academic/generate-questions", { content, count, type });
-    showResult("questionsResult", md2html(data.result));
+    const meta = { func: "generateQuestions" };
+    showResult("questionsResult", md2html(data.result), meta);
   } catch (e) { showToast("❌ " + e.message); } finally { hideLoading(); }
 }
 
@@ -218,7 +275,8 @@ async function generateStudyPlan() {
   showLoading();
   try {
     const data = await apiPost("/api/academic/study-plan", { subject, exam_date, weak_points, available_hours });
-    showResult("studyPlanResult", md2html(data.result));
+    const meta = { func: "generateStudyPlan" };
+    showResult("studyPlanResult", md2html(data.result), meta);
   } catch (e) { showToast("❌ " + e.message); } finally { hideLoading(); }
 }
 
@@ -229,7 +287,8 @@ async function generateLiteratureReview() {
   showLoading();
   try {
     const data = await apiPost("/api/academic/literature-review", { topic, field });
-    showResult("litResult", md2html(data.result));
+    const meta = { func: "generateLiteratureReview" };
+    showResult("litResult", md2html(data.result), meta);
   } catch (e) { showToast("❌ " + e.message); } finally { hideLoading(); }
 }
 
@@ -242,7 +301,8 @@ async function generateLabReport() {
   showLoading();
   try {
     const data = await apiPost("/api/academic/lab-report", { experiment, purpose, method, data: data_input });
-    showResult("labResult", md2html(data.result));
+    const meta = { func: "generateLabReport" };
+    showResult("labResult", md2html(data.result), meta);
   } catch (e) { showToast("❌ " + e.message); } finally { hideLoading(); }
 }
 
@@ -253,7 +313,8 @@ async function analyzeWrongQuestions() {
   showLoading();
   try {
     const data = await apiPost("/api/academic/wrong-questions", { questions, subject });
-    showResult("wqResult", md2html(data.result));
+    const meta = { func: "analyzeWrongQuestions" };
+    showResult("wqResult", md2html(data.result), meta);
   } catch (e) { showToast("❌ " + e.message); } finally { hideLoading(); }
 }
 
@@ -311,7 +372,8 @@ async function generateTemplate() {
   showLoading();
   try {
     const data = await apiPost("/api/affairs/template", { type, user_info });
-    showResult("templateResult", md2html(data.result));
+    const meta = { func: "generateTemplate" };
+    showResult("templateResult", md2html(data.result), meta);
   } catch (e) { showToast("❌ " + e.message); } finally { hideLoading(); }
 }
 
@@ -325,7 +387,8 @@ async function getCareerPlan() {
   showLoading();
   try {
     const data = await apiPost("/api/growth/career-plan", { major, grade, interests, goals });
-    showResult("careerPlanResult", md2html(data.result));
+    const meta = { func: "getCareerPlan" };
+    showResult("careerPlanResult", md2html(data.result), meta);
   } catch (e) { showToast("❌ " + e.message); } finally { hideLoading(); }
 }
 
@@ -337,7 +400,8 @@ async function optimizeResume() {
   showLoading();
   try {
     const data = await apiPost("/api/growth/resume", { resume, position, industry });
-    showResult("resumeResult", md2html(data.result));
+    const meta = { func: "optimizeResume" };
+    showResult("resumeResult", md2html(data.result), meta);
   } catch (e) { showToast("❌ " + e.message); } finally { hideLoading(); }
 }
 
@@ -356,7 +420,8 @@ async function practiceInterview() {
   showLoading();
   try {
     const data = await apiPost("/api/growth/interview", { position, question, answer, mode: "feedback" });
-    showResult("interviewResult", md2html(data.result));
+    const meta = { func: "practiceInterview" };
+    showResult("interviewResult", md2html(data.result), meta);
   } catch (e) { showToast("❌ " + e.message); } finally { hideLoading(); }
 }
 
@@ -366,7 +431,8 @@ async function generateInterviewQuestions() {
   showLoading();
   try {
     const data = await apiPost("/api/growth/interview", { position, mode: "generate" });
-    showResult("interviewResult", md2html(data.result));
+    const meta = { func: "generateInterviewQuestions" };
+    showResult("interviewResult", md2html(data.result), meta);
   } catch (e) { showToast("❌ " + e.message); } finally { hideLoading(); }
 }
 
@@ -381,7 +447,8 @@ async function askCampusNav() {
   showLoading();
   try {
     const data = await apiPost("/api/growth/campus-nav", { query });
-    showResult("campusNavResult", md2html(data.result));
+    const meta = { func: "askCampusNav" };
+    showResult("campusNavResult", md2html(data.result), meta);
   } catch (e) { showToast("❌ " + e.message); } finally { hideLoading(); }
 }
 
@@ -396,7 +463,7 @@ function addExamItem() {
     </div>
     <div class="form-row">
       <div class="form-group">
-        <label>考试名称 *</label>
+        <label>考试名称 <span class="required">*</span></label>
         <input type="text" class="er-name" placeholder="如：线性代数期末" />
       </div>
       <div class="form-group">
@@ -435,8 +502,60 @@ async function generateExamReminder() {
   showLoading();
   try {
     const data = await apiPost("/api/growth/exam-reminder", { exams, semester_start });
-    showResult("examReminderResult", md2html(data.result));
+    const meta = { func: "generateExamReminder" };
+    showResult("examReminderResult", md2html(data.result), meta);
   } catch (e) { showToast("❌ " + e.message); } finally { hideLoading(); }
+}
+
+/* ===== 导出 PDF（后端需提供 /api/export/pdf，返回 application/pdf） ===== */
+async function exportPDF(id) {
+  const inner = document.querySelector(`#${id} .result-inner`);
+  if (!inner) return;
+  const html = inner.innerHTML;
+  showLoading();
+  try {
+    const res = await fetch(API + "/api/export/pdf", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ html })
+    });
+    if (!res.ok) throw new Error("导出失败");
+    const blob = await res.blob();
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    const ts = new Date().toISOString().slice(0, 16).replace("T", "_").replace(":", "-");
+    a.download = `智校通_${id}_${ts}.pdf`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+    showToast("✅ PDF 已下载");
+  } catch (e) {
+    showToast("❌ 导出失败：" + e.message);
+  } finally { hideLoading(); }
+}
+
+/* ===== 重新生成（简单重放：按记录的 func 调用相应函数） ===== */
+async function regenerate(id) {
+  const meta = lastRequests[id];
+  if (!meta) { showToast("⚠️ 无可重试记录"); return; }
+  const fnName = meta.func;
+  const fn = window[fnName];
+  if (typeof fn === "function") {
+    try {
+      await fn();
+      showToast("🔁 已重新生成");
+    } catch (e) {
+      showToast("❌ 重新生成失败：" + e.message);
+    }
+  } else {
+    showToast("⚠️ 无法识别的重试函数");
+  }
+}
+
+function retryUpload() {
+  extractKnowledge();
 }
 
 /* ===== 工具 ===== */
