@@ -15,14 +15,16 @@
     <div class="header-inner">
       <div class="logo">
         <span class="logo-icon">🎓</span>
-        <span class="logo-text">智校通</span>
-        <span class="logo-sub">高校AI助手</span>
+        <div>
+          <div class="logo-text">智校通</div>
+          <div class="logo-slogan">智校通—高校AI学习与校园事务一站式助手</div>
+        </div>
       </div>
       <nav class="nav">
-        <button class="nav-btn active" data-tab="academic">📚 学术辅助</button>
-        <button class="nav-btn" data-tab="affairs">🏫 校园事务</button>
-        <button class="nav-btn" data-tab="growth">🎯 成长助手</button>
-        <button class="nav-btn" data-tab="about">ℹ️ 关于</button>
+        <button class="nav-btn active" data-tab="academic">首页</button>
+        <button class="nav-btn" data-tab="academic">学习工具</button>
+        <button class="nav-btn" data-tab="affairs">校园事务</button>
+        <button class="nav-btn" data-tab="about">关于我们</button>
       </nav>
     </div>
   </header>
@@ -46,10 +48,11 @@
                 <small>支持 PDF、Word、TXT、Markdown</small>
               </div>
               <div class="upload-selected" id="uploadSelected" style="display:none"></div>
+              <progress id="uploadProgress" value="0" max="100" style="width:100%; display:none; margin-top:8px;"></progress>
             </div>
             <label>或直接粘贴课程内容：</label>
-            <textarea id="extractText" rows="4" placeholder="粘贴课件文字内容…"></textarea>
-            <button class="btn btn-primary" onclick="extractKnowledge()">🔍 提炼知识点</button>
+            <textarea id="extractText" rows="4" placeholder="示例：章节 1 概念；定理 A 等…（可粘贴讲义或课件片段）"></textarea>
+            <button class="btn btn-primary" id="btnExtract" onclick="extractKnowledge()">开始生成</button>
           </div>
           <div class="result-box" id="extractResult"></div>
         </div>
@@ -75,7 +78,7 @@
                 </select>
               </div>
             </div>
-            <button class="btn btn-primary" onclick="generateQuestions()">🎲 生成练习题</button>
+            <button class="btn btn-primary" id="btnQGen" onclick="generateQuestions()">开始生成</button>
           </div>
           <div class="result-box" id="questionsResult"></div>
         </div>
@@ -85,7 +88,7 @@
           <div class="card-title">📅 复习计划生成</div>
           <div class="card-body">
             <div class="form-group">
-              <label>课程名称 *</label>
+              <label>课程名称 <span class="required">*</span></label>
               <input type="text" id="spSubject" placeholder="如：高等数学、数据结构" />
             </div>
             <div class="form-group">
@@ -100,7 +103,7 @@
               <label>每日可用时间（小时）</label>
               <input type="number" id="spHours" value="2" min="0.5" max="12" step="0.5" />
             </div>
-            <button class="btn btn-primary" onclick="generateStudyPlan()">📋 生成复习计划</button>
+            <button class="btn btn-primary" onclick="generateStudyPlan()">开始生成</button>
           </div>
           <div class="result-box" id="studyPlanResult"></div>
         </div>
@@ -110,14 +113,14 @@
           <div class="card-title">📄 文献综述辅助</div>
           <div class="card-body">
             <div class="form-group">
-              <label>研究主题 *</label>
+              <label>研究主题 <span class="required">*</span></label>
               <input type="text" id="litTopic" placeholder="如：深度学习在医疗影像中的应用" />
             </div>
             <div class="form-group">
               <label>研究领域</label>
               <input type="text" id="litField" placeholder="如：计算机科学、医学" />
             </div>
-            <button class="btn btn-primary" onclick="generateLiteratureReview()">📝 生成综述框架</button>
+            <button class="btn btn-primary" onclick="generateLiteratureReview()">生成综述框架</button>
           </div>
           <div class="result-box" id="litResult"></div>
         </div>
@@ -127,7 +130,7 @@
           <div class="card-title">🔬 实验报告辅助</div>
           <div class="card-body">
             <div class="form-group">
-              <label>实验名称 *</label>
+              <label>实验名称 <span class="required">*</span></label>
               <input type="text" id="labName" placeholder="如：单摆测重力加速度" />
             </div>
             <div class="form-group">
@@ -142,7 +145,7 @@
               <label>实验数据/结果</label>
               <textarea id="labData" rows="2" placeholder="记录的数据或观察结果…"></textarea>
             </div>
-            <button class="btn btn-primary" onclick="generateLabReport()">🧪 生成报告初稿</button>
+            <button class="btn btn-primary" onclick="generateLabReport()">生成报告初稿</button>
           </div>
           <div class="result-box" id="labResult"></div>
         </div>
@@ -157,7 +160,7 @@
             </div>
             <label>错题内容（可多道）：</label>
             <textarea id="wqContent" rows="5" placeholder="粘贴错题题目及你的错误解答…"></textarea>
-            <button class="btn btn-primary" onclick="analyzeWrongQuestions()">🔍 分析错题</button>
+            <button class="btn btn-primary" onclick="analyzeWrongQuestions()">分析错题</button>
           </div>
           <div class="result-box" id="wqResult"></div>
         </div>
@@ -171,7 +174,6 @@
         <p>查询请假、奖助学金、证件补办等校园事务流程，生成申请模板</p>
       </div>
       <div class="affairs-layout">
-        <!-- 快捷入口 -->
         <div class="affairs-quick">
           <div class="quick-title">🔖 常见事务快捷查询</div>
           <div class="quick-buttons">
@@ -186,7 +188,6 @@
           </div>
         </div>
 
-        <!-- 问答区域 -->
         <div class="chat-container">
           <div class="chat-messages" id="affairsChat">
             <div class="message bot-msg">
@@ -204,12 +205,11 @@
           </div>
         </div>
 
-        <!-- 申请模板生成 -->
         <div class="card template-card">
           <div class="card-title">📋 申请模板生成</div>
           <div class="card-body">
             <div class="form-group">
-              <label>申请类型 *</label>
+              <label>申请类型 <span class="required">*</span></label>
               <select id="templateType">
                 <option value="">请选择申请类型</option>
                 <option value="请假申请">请假申请</option>
@@ -224,11 +224,11 @@
             </div>
             <div class="form-row">
               <div class="form-group">
-                <label>姓名</label>
+                <label>姓名 <span class="required">*</span></label>
                 <input type="text" id="tmplName" placeholder="您的姓名" />
               </div>
               <div class="form-group">
-                <label>学号</label>
+                <label>学号 <span class="required">*</span></label>
                 <input type="text" id="tmplId" placeholder="学号" />
               </div>
             </div>
@@ -261,7 +261,7 @@
           <div class="card-title">🗺️ 学业与职业规划</div>
           <div class="card-body">
             <div class="form-group">
-              <label>专业 *</label>
+              <label>专业 <span class="required">*</span></label>
               <input type="text" id="cpMajor" placeholder="如：软件工程" />
             </div>
             <div class="form-group">
@@ -283,7 +283,7 @@
               <label>目标/期望</label>
               <input type="text" id="cpGoals" placeholder="如：考研、出国、互联网就业" />
             </div>
-            <button class="btn btn-primary" onclick="getCareerPlan()">🚀 生成规划建议</button>
+            <button class="btn btn-primary" onclick="getCareerPlan()">生成规划建议</button>
           </div>
           <div class="result-box" id="careerPlanResult"></div>
         </div>
@@ -304,7 +304,7 @@
             </div>
             <label>简历内容：</label>
             <textarea id="resumeContent" rows="8" placeholder="粘贴您的简历文字内容…"></textarea>
-            <button class="btn btn-primary" onclick="optimizeResume()">✨ 优化简历</button>
+            <button class="btn btn-primary" onclick="optimizeResume()">优化简历</button>
           </div>
           <div class="result-box" id="resumeResult"></div>
         </div>
@@ -323,21 +323,21 @@
                 <input type="text" id="ivPosition" placeholder="如：产品经理" />
               </div>
               <div class="form-group">
-                <label>面试题目 *</label>
+                <label>面试题目 <span class="required">*</span></label>
                 <input type="text" id="ivQuestion" placeholder="如：请做一下自我介绍" />
               </div>
               <div class="form-group">
-                <label>您的回答 *</label>
+                <label>您的回答 <span class="required">*</span></label>
                 <textarea id="ivAnswer" rows="4" placeholder="输入您的面试回答…"></textarea>
               </div>
-              <button class="btn btn-primary" onclick="practiceInterview()">💬 获取点评</button>
+              <button class="btn btn-primary" onclick="practiceInterview()">获取点评</button>
             </div>
             <div id="interviewGenerate" style="display:none">
               <div class="form-group">
-                <label>目标岗位 *</label>
+                <label>目标岗位 <span class="required">*</span></label>
                 <input type="text" id="ivGenPosition" placeholder="如：前端开发工程师" />
               </div>
-              <button class="btn btn-primary" onclick="generateInterviewQuestions()">🎲 生成面试题</button>
+              <button class="btn btn-primary" onclick="generateInterviewQuestions()">生成面试题</button>
             </div>
           </div>
           <div class="result-box" id="interviewResult"></div>
@@ -356,7 +356,7 @@
               <button class="quick-btn small" onclick="campusNav('如何充分利用大学四年时光？')">⭐ 大学规划</button>
             </div>
             <textarea id="campusNavInput" rows="2" placeholder="输入校园生活相关问题…"></textarea>
-            <button class="btn btn-primary" onclick="askCampusNav()">🔍 获取建议</button>
+            <button class="btn btn-primary" onclick="askCampusNav()">获取建议</button>
           </div>
           <div class="result-box" id="campusNavResult"></div>
         </div>
@@ -373,7 +373,7 @@
               <div class="exam-item">
                 <div class="form-row">
                   <div class="form-group">
-                    <label>考试名称 *</label>
+                    <label>考试名称 <span class="required">*</span></label>
                     <input type="text" class="er-name" placeholder="如：高等数学期末" />
                   </div>
                   <div class="form-group">
@@ -387,8 +387,8 @@
                 </div>
               </div>
             </div>
-            <button class="btn btn-secondary" onclick="addExamItem()">➕ 添加考试</button>
-            <button class="btn btn-primary" onclick="generateExamReminder()">⏰ 生成提醒计划</button>
+            <button class="btn btn-secondary" onclick="addExamItem()">添加考试</button>
+            <button class="btn btn-primary" onclick="generateExamReminder()">生成提醒计划</button>
           </div>
           <div class="result-box" id="examReminderResult"></div>
         </div>
@@ -445,6 +445,16 @@ python app.py</code></pre>
       </div>
     </section>
   </main>
+
+  <!-- 页脚 合规与声明 -->
+  <footer class="site-footer">
+    <div class="footer-inner">
+      <div class="footer-links">
+        <a href="#privacy">隐私政策</a> · <a href="#terms">用户协议</a> · <a href="#auth">学校授权说明</a>
+      </div>
+      <div class="footer-note">声明：仅用于学习辅助，不替代作业/论文写作。若涉及敏感/个人信息，请勿上传。</div>
+    </div>
+  </footer>
 
   <!-- Loading 遮罩 -->
   <div class="loading-overlay" id="loadingOverlay">
